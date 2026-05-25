@@ -138,7 +138,6 @@ func (session *MinerUVl) getLayoutParsingResults(
 		text := ocrResult
 
 		if detResult.Label == "table" {
-			fmt.Println(ocrResult)
 			text = ocr.ConvertOtslToHtml(ocrResult)
 		}
 

@@ -1,7 +1,6 @@
 package vl
 
 /*
-*
 公共的vl 请求参数和返回参数
 */
 type ChatCompletionRequest struct {
