@@ -9,6 +9,7 @@ import (
 
 	"github.com/weihuanwan/paddleocr-go/common"
 	"github.com/weihuanwan/paddleocr-go/layout"
+	"github.com/weihuanwan/paddleocr-go/ocr"
 	"gocv.io/x/gocv"
 )
 
@@ -21,13 +22,9 @@ type MinerUVl struct {
 	LayoutDetSession *layout.LayoutDetSession //版面分析模型
 }
 
-type MinerUVlChatCompletionRequest struct {
-	ChatCompletionRequest
-}
-
 func NewMinerUVlChatCompletionRequest(modelName string,
 	dataURL string,
-	task string) MinerUVlChatCompletionRequest {
+	task string) ChatCompletionRequest {
 	messages := []Messages{
 		{
 			Role: "user",
@@ -45,11 +42,22 @@ func NewMinerUVlChatCompletionRequest(modelName string,
 			},
 		},
 	}
-	return MinerUVlChatCompletionRequest{ChatCompletionRequest{
-		Model:       modelName,
-		Messages:    messages,
-		Temperature: 0.0,
-	},
+	vllmXargs := map[string]interface{}{
+		"no_repeat_ngram_size": 100,
+		"debug":                false,
+	}
+
+	return ChatCompletionRequest{
+		Model:             modelName,
+		Messages:          messages,
+		Temperature:       0.0,
+		TopK:              1,
+		TopP:              0.01,
+		PresencePenalty:   1,
+		FrequencyPenalty:  0.05,
+		RepetitionPenalty: 1,
+		SkipSpecialTokens: false,
+		VllmXargs:         vllmXargs,
 	}
 }
 
@@ -61,7 +69,7 @@ func NewDefaultMinerUVL(
 
 ) *MinerUVl {
 	tasks := map[string]string{
-		"ocr":      "OCR:",
+		"ocr":      "Text Recognition:",
 		"table":    "Table Recognition:",
 		"formula":  "Formula Recognition:",
 		"chart":    "Chart Recognition:",
@@ -131,7 +139,7 @@ func (session *MinerUVl) getLayoutParsingResults(
 
 		if detResult.Label == "table" {
 			fmt.Println(ocrResult)
-			//text = ocr.ConvertOtslToHtml(ocrResult)
+			text = ocr.ConvertOtslToHtml(ocrResult)
 		}
 
 		block := &MinerUVlBlock{
@@ -154,7 +162,7 @@ func (session *MinerUVl) getTask(key string) string {
 	return task
 }
 
-func (session *MinerUVl) run(request MinerUVlChatCompletionRequest) (*ChatCompletionResponse, error) {
+func (session *MinerUVl) run(request ChatCompletionRequest) (*ChatCompletionResponse, error) {
 	request.Model = session.Model
 	reqBody, err := json.Marshal(request)
 	// 5️⃣ 构造 HTTP 请求（标准写法）

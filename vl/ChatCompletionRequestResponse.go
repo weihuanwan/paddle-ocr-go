@@ -5,11 +5,16 @@ package vl
 公共的vl 请求参数和返回参数
 */
 type ChatCompletionRequest struct {
-	Model             string     `json:"model"`
-	Messages          []Messages `json:"messages"`
-	Temperature       float32    `json:"temperature"`
-	TopK              int        `json:"top_k"`
-	SkipSpecialTokens bool       `json:"skip_special_tokens"`
+	Model             string      `json:"model"`
+	Messages          []Messages  `json:"messages"`
+	Temperature       float32     `json:"temperature"`
+	TopK              int         `json:"top_k"`
+	TopP              float32     `json:"top_p"`
+	PresencePenalty   float32     `json:"presence_penalty"`
+	FrequencyPenalty  float32     `json:"frequency_penalty"`
+	RepetitionPenalty float32     `json:"repetition_penalty"`
+	SkipSpecialTokens bool        `json:"skip_special_tokens"`
+	VllmXargs         interface{} `json:"vllm_xargs"`
 }
 
 type Messages struct {
