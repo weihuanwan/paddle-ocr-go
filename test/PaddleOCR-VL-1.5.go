@@ -6,6 +6,7 @@ import (
 
 	"github.com/weihuanwan/paddleocr-go/layout"
 	"github.com/weihuanwan/paddleocr-go/ocr"
+	"github.com/weihuanwan/paddleocr-go/vl"
 	ort "github.com/yalue/onnxruntime_go"
 )
 
@@ -31,7 +32,7 @@ func main() {
 
 	docLayoutSession := layout.NewLayoutDetSession(layoutDetSessionInternal)
 
-	paddleOCRVL := ocr.NewDefaultPaddleOCRVL("PaddlePaddle/PaddleOCR-VL-1.5",
+	paddleOCRVL := vl.NewDefaultPaddleOCRVL("PaddlePaddle/PaddleOCR-VL-1.5",
 		"http://localhost:8000/v1/chat/completions", "sk-ufajxhcyibsxcatybmjqhaierwwbbxjdrhwitcmrscyodhsq", docLayoutSession)
 
 	imagePath := "test/images/layout1.png"
