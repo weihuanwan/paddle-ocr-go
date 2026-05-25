@@ -32,10 +32,10 @@ func main() {
 
 	docLayoutSession := layout.NewLayoutDetSession(layoutDetSessionInternal)
 
-	minerUVl := vl.NewDefaultMinerUVL("opendatalab/MinerU2.5-2509-1.2B",
+	minerUVl := vl.NewDefaultMinerUVL("OpenDataLab/MinerU2.5-Pro-2605-1.2B",
 		"http://localhost:8000/v1/chat/completions", "sk-ufajxhcyibsxcatybmjqhaierwwbbxjdrhwitcmrscyodhsq", docLayoutSession)
 
-	imagePath := "test/images/img.png"
+	imagePath := "test/images/table_recognition2.jpg"
 	//
 	//imageMat := gocv.IMRead(imagePath, gocv.IMReadColor)
 	//defer imageMat.Close()
