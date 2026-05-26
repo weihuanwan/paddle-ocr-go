@@ -119,6 +119,7 @@ func (session *PaddleOCRVL) getLayoutParsingResults(
 
 		resp, err := session.Run(req)
 		if err != nil {
+			fmt.Println(err)
 			continue
 		}
 

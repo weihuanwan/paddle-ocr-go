@@ -68,12 +68,13 @@ func NewDefaultMinerUVL(
 
 ) *MinerUVl {
 	tasks := map[string]string{
-		"ocr":      "Text Recognition:",
-		"table":    "Table Recognition:",
-		"formula":  "Formula Recognition:",
-		"chart":    "Chart Recognition:",
-		"seal":     "Seal Recognition:",
-		"spotting": "Spotting:",
+		"ocr":                    "\nText Recognition:",
+		"table":                  "\nTable Recognition:",
+		"formula":                "\nFormula Recognition:",
+		"chart":                  "\nImage Analysis:",
+		"seal":                   "Seal Recognition:",
+		"spotting":               "Spotting:",
+		"cross_page_table_merge": "",
 	}
 	MinerUVl := &MinerUVl{
 		model,

@@ -7,13 +7,13 @@ type ChatCompletionRequest struct {
 	Model             string      `json:"model"`
 	Messages          []Messages  `json:"messages"`
 	Temperature       float32     `json:"temperature"`
-	TopK              int         `json:"top_k"`
-	TopP              float32     `json:"top_p"`
-	PresencePenalty   float32     `json:"presence_penalty"`
-	FrequencyPenalty  float32     `json:"frequency_penalty"`
-	RepetitionPenalty float32     `json:"repetition_penalty"`
-	SkipSpecialTokens bool        `json:"skip_special_tokens"`
-	VllmXargs         interface{} `json:"vllm_xargs"`
+	TopK              int         `json:"top_k,omitempty"`
+	TopP              float32     `json:"top_p,omitempty"`
+	PresencePenalty   float32     `json:"presence_penalty,omitempty"`
+	FrequencyPenalty  float32     `json:"frequency_penalty,omitempty"`
+	RepetitionPenalty float32     `json:"repetition_penalty,omitempty"`
+	SkipSpecialTokens bool        `json:"skip_special_tokens,omitempty"`
+	VllmXargs         interface{} `json:"vllm_xargs,omitempty"`
 }
 
 type Messages struct {
