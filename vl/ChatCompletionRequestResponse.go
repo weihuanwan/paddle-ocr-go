@@ -12,7 +12,7 @@ type ChatCompletionRequest struct {
 	PresencePenalty   float32     `json:"presence_penalty,omitempty"`
 	FrequencyPenalty  float32     `json:"frequency_penalty,omitempty"`
 	RepetitionPenalty float32     `json:"repetition_penalty,omitempty"`
-	SkipSpecialTokens bool        `json:"skip_special_tokens,omitempty"`
+	SkipSpecialTokens bool        `json:"skip_special_tokens"`
 	VllmXargs         interface{} `json:"vllm_xargs,omitempty"`
 }
 

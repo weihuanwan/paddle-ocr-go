@@ -68,13 +68,13 @@ func NewDefaultMinerUVL(
 
 ) *MinerUVl {
 	tasks := map[string]string{
-		"ocr":                    "\nText Recognition:",
-		"table":                  "\nTable Recognition:",
-		"formula":                "\nFormula Recognition:",
-		"chart":                  "\nImage Analysis:",
-		"seal":                   "Seal Recognition:",
-		"spotting":               "Spotting:",
-		"cross_page_table_merge": "",
+		"table":                    "\nTable Recognition:",
+		"equation":                 "\nFormula Recognition:",
+		"image":                    "\nImage Analysis:",
+		"chart":                    "\nImage Analysis:",
+		"[default]":                "\nText Recognition:",
+		"[layout]":                 "\nLayout Detection:",
+		"[cross_page_table_merge]": "",
 	}
 	MinerUVl := &MinerUVl{
 		model,
@@ -156,7 +156,7 @@ func (session *MinerUVl) getLayoutParsingResults(
 func (session *MinerUVl) getTask(key string) string {
 	task := session.Tasks[key]
 	if task == "" {
-		task = "OCR:"
+		task = "\nText Recognition:"
 	}
 	return task
 }
