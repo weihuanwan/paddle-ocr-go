@@ -129,7 +129,7 @@ func (session *MinerUVl) getLayoutParsingResults(
 			session.getTask(detResult.Label),
 		)
 
-		resp, err := session.run(req)
+		resp, err := session.predict(req)
 		if err != nil {
 			continue
 		}
@@ -161,7 +161,7 @@ func (session *MinerUVl) getTask(key string) string {
 	return task
 }
 
-func (session *MinerUVl) run(request ChatCompletionRequest) (*ChatCompletionResponse, error) {
+func (session *MinerUVl) predict(request ChatCompletionRequest) (*ChatCompletionResponse, error) {
 	request.Model = session.Model
 	reqBody, err := json.Marshal(request)
 	// 5️⃣ 构造 HTTP 请求（标准写法）
