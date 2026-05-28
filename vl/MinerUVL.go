@@ -104,7 +104,7 @@ func (session *MinerUVl) RunOCR(imagePath string) ([]*MinerUVlBlock, error) {
 	if err != nil {
 		return nil, err
 	}
-	//defer originImage.Close()
+	defer originImage.Close()
 
 	layoutDetResult, err := session.layoutDetect(originImage)
 
@@ -271,25 +271,19 @@ func (session *MinerUVl) layoutDetect(originImage *gocv.Mat) ([]*common.LayoutDe
 	}
 	output := resp.Choices[0].Message.Content
 
-	// 按 <|box_start|> 分割，模拟 Python 正则的 (?=<\|box_start\|>)
 	// 注意：strings.Split 会去掉分隔符，需要加回来
 	parts := strings.Split(output, "<|box_start|>")
 
 	layoutDetResults := make([]*common.LayoutDetResult, 0, len(parts))
 	for i, part := range parts {
 		// 第一部分：如果 output 不以 <|box_start|> 开头，这里是前缀垃圾
-		if i == 0 {
-			if strings.TrimSpace(part) != "" {
-				fmt.Println("Layout output prefix not matching expected format", "content", part)
-			}
+		if i == 0 && strings.TrimSpace(part) != "" {
+			fmt.Println("Layout output prefix not matching expected format", "content", part)
 			continue
 		}
 		// 恢复完整块
 		blockStr := "<|box_start|>" + part
 		blockStr = strings.TrimSpace(blockStr)
-		if blockStr == "" {
-			continue
-		}
 		m := blockRe.FindStringSubmatch(blockStr)
 		if m == nil {
 			fmt.Println("Layout output does not match expected format", "block", blockStr)
