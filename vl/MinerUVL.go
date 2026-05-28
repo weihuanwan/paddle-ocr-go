@@ -6,20 +6,22 @@ import (
 	"fmt"
 	"image"
 	"io"
+	"math"
 	"net/http"
+	"regexp"
+	"strconv"
+	"strings"
 
 	"github.com/weihuanwan/paddleocr-go/common"
-	"github.com/weihuanwan/paddleocr-go/layout"
 	"gocv.io/x/gocv"
 )
 
 type MinerUVl struct {
-	Model            string            // 模型名称
-	Url              string            // 请求路径
-	ApiKey           string            // 请求路径
-	Tasks            map[string]string //任务类型
-	LayoutImageSize  [2]int
-	LayoutDetSession *layout.LayoutDetSession //版面分析模型
+	Model           string            // 模型名称
+	Url             string            // 请求路径
+	ApiKey          string            // 请求路径
+	Tasks           map[string]string //任务类型
+	LayoutImageSize [2]int
 }
 
 func NewMinerUVlChatCompletionRequest(modelName string,
@@ -69,8 +71,6 @@ func NewDefaultMinerUVL(
 	model string,
 	url string,
 	apiKey string,
-	layoutDetSession *layout.LayoutDetSession,
-
 ) *MinerUVl {
 	tasks := map[string]string{
 		"table":                    "\nTable Recognition:",
@@ -87,7 +87,6 @@ func NewDefaultMinerUVL(
 		apiKey,
 		tasks,
 		[2]int{1036, 1036},
-		layoutDetSession,
 	}
 
 	return MinerUVl
@@ -105,17 +104,12 @@ func (session *MinerUVl) RunOCR(imagePath string) ([]*MinerUVlBlock, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer originImage.Close()
+	//defer originImage.Close()
 
-	//layoutDetResult, err := session.layoutDetect(originImage)
+	layoutDetResult, err := session.layoutDetect(originImage)
 
-	//// 版面分析模型识别
-	layoutDetResult, err := session.LayoutDetSession.Run(originImage)
-	if err != nil {
-		return nil, err
-	}
-	MinerUVlBlocks := session.getLayoutParsingResults(layoutDetResult, originImage)
-	return MinerUVlBlocks, nil
+	minerUVlBlocks := session.getLayoutParsingResults(layoutDetResult, originImage)
+	return minerUVlBlocks, nil
 }
 
 func (session *MinerUVl) getLayoutParsingResults(
@@ -211,17 +205,57 @@ func (session *MinerUVl) predict(request ChatCompletionRequest) (*ChatCompletion
 
 }
 
+var blockRe = regexp.MustCompile(
+	`^<\|box_start\|>(\d+)\s+(\d+)\s+(\d+)\s+(\d+)` +
+		`<\|box_end\|><\|ref_start\|>(\w+)<\|ref_end\|>` +
+		`(?:<\|rotate_(up|right|down|left)\|>)?` +
+		`([\s\S]*)$`,
+)
+var rotateAngles = map[string]int{
+	"up":    0,
+	"right": 90,
+	"down":  180,
+	"left":  270,
+}
+var blockTypes = map[string]struct{}{
+	"algorithm":      {},
+	"aside_text":     {},
+	"chart":          {},
+	"code":           {},
+	"code_caption":   {},
+	"equation":       {},
+	"equation_block": {},
+	"footer":         {},
+	"header":         {},
+	"image":          {},
+	"image_block":    {},
+	"image_caption":  {},
+	"image_footnote": {},
+	"list":           {},
+	"list_item":      {},
+	"page_footnote":  {},
+	"page_number":    {},
+	"phonetic":       {},
+	"ref_text":       {},
+	"table":          {},
+	"table_caption":  {},
+	"table_footnote": {},
+	"text":           {},
+	"title":          {},
+	"unknown":        {},
+}
+
 func (session *MinerUVl) layoutDetect(originImage *gocv.Mat) ([]*common.LayoutDetResult, error) {
+	// 1. resize 1036,1036
 	resizeMat := gocv.NewMat()
+	height := originImage.Rows()
+	width := originImage.Cols()
 	defer resizeMat.Close()
 	err := gocv.Resize(*originImage, &resizeMat, image.Pt(session.LayoutImageSize[0], session.LayoutImageSize[1]), 0, 0, gocv.InterpolationCubic)
 
 	if err != nil {
 		return nil, fmt.Errorf("session resize failed: %v", err)
 	}
-
-	//scaleW := float32(session.LayoutImageSize[0]) / float32(originImage.Cols())
-	//scaleH := float32(session.LayoutImageSize[1]) / float32(originImage.Rows())
 
 	base64Str, err := matToBase64(&resizeMat)
 
@@ -235,8 +269,86 @@ func (session *MinerUVl) layoutDetect(originImage *gocv.Mat) ([]*common.LayoutDe
 	if err != nil {
 		return nil, fmt.Errorf("session predict [layout]  failed: %v", err)
 	}
-	ocrResult := resp.Choices[0].Message.Content
-	println(ocrResult)
+	output := resp.Choices[0].Message.Content
 
-	return nil, nil
+	// 按 <|box_start|> 分割，模拟 Python 正则的 (?=<\|box_start\|>)
+	// 注意：strings.Split 会去掉分隔符，需要加回来
+	parts := strings.Split(output, "<|box_start|>")
+
+	layoutDetResults := make([]*common.LayoutDetResult, 0, len(parts))
+	for i, part := range parts {
+		// 第一部分：如果 output 不以 <|box_start|> 开头，这里是前缀垃圾
+		if i == 0 {
+			if strings.TrimSpace(part) != "" {
+				fmt.Println("Layout output prefix not matching expected format", "content", part)
+			}
+			continue
+		}
+		// 恢复完整块
+		blockStr := "<|box_start|>" + part
+		blockStr = strings.TrimSpace(blockStr)
+		if blockStr == "" {
+			continue
+		}
+		m := blockRe.FindStringSubmatch(blockStr)
+		if m == nil {
+			fmt.Println("Layout output does not match expected format", "block", blockStr)
+			continue
+		}
+
+		// m[1]~m[4]: x1, y1, x2, y2
+		x1, _ := strconv.Atoi(m[1])
+		y1, _ := strconv.Atoi(m[2])
+		x2, _ := strconv.Atoi(m[3])
+		y2, _ := strconv.Atoi(m[4])
+
+		// 确保 x1 < x2, y1 < y2
+		if x2 < x1 {
+			x1, x2 = x2, x1
+		}
+		if y2 < y1 {
+			y1, y2 = y2, y1
+		}
+		x1 = int(math.Round(float64(x1) / 1000.0 * float64(width)))
+		y1 = int(math.Round(float64(y1) / 1000.0 * float64(height)))
+		x2 = int(math.Round(float64(x2) / 1000.0 * float64(width)))
+		y2 = int(math.Round(float64(y2) / 1000.0 * float64(height)))
+
+		// m[5]: ref_type
+		refType := strings.ToLower(m[5])
+		if refType == "unknown" {
+			refType = "image"
+		}
+		if refType == "inline_formula" {
+			fmt.Println("Skipping inline formula block in layout output", "block", blockStr)
+			continue
+		}
+		if _, ok := blockTypes[refType]; !ok {
+			fmt.Println("Unknown block type in layout output line", "block", blockStr)
+			continue
+		}
+		// m[6]: 旋转方向（如 "up"），可能为空
+		var angle *int
+		if m[6] != "" {
+			if deg, ok := rotateAngles[m[6]]; ok {
+				angle = &deg
+			}
+		}
+		if angle == nil {
+			fmt.Println("No angle found in layout output line", "block", blockStr)
+		}
+
+		tail := strings.TrimSpace(m[7])
+		// text 类型特殊处理 merge_prev
+		if refType == "text" {
+			fmt.Println(tail)
+		}
+		layoutDetResult := &common.LayoutDetResult{
+			Label: refType,
+			Point: []int{x1, y1, x2, y2},
+		}
+
+		layoutDetResults = append(layoutDetResults, layoutDetResult)
+	}
+	return layoutDetResults, nil
 }
