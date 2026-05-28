@@ -17,8 +17,8 @@ type ChatCompletionRequest struct {
 }
 
 type Messages struct {
-	Role    string    `json:"role"`
-	Content []Content `json:"content"`
+	Role    string      `json:"role"`
+	Content interface{} `json:"content"`
 }
 
 type Content struct {

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"image"
 	"io"
 	"net/http"
 
@@ -13,11 +14,11 @@ import (
 )
 
 type MinerUVl struct {
-	Model  string            // 模型名称
-	Url    string            // 请求路径
-	ApiKey string            // 请求路径
-	Tasks  map[string]string //任务类型
-
+	Model            string            // 模型名称
+	Url              string            // 请求路径
+	ApiKey           string            // 请求路径
+	Tasks            map[string]string //任务类型
+	LayoutImageSize  [2]int
 	LayoutDetSession *layout.LayoutDetSession //版面分析模型
 }
 
@@ -25,6 +26,10 @@ func NewMinerUVlChatCompletionRequest(modelName string,
 	dataURL string,
 	task string) ChatCompletionRequest {
 	messages := []Messages{
+		{
+			Role:    "system",
+			Content: "You are a helpful assistant.",
+		},
 		{
 			Role: "user",
 			Content: []Content{
@@ -81,6 +86,7 @@ func NewDefaultMinerUVL(
 		url,
 		apiKey,
 		tasks,
+		[2]int{1036, 1036},
 		layoutDetSession,
 	}
 
@@ -100,7 +106,10 @@ func (session *MinerUVl) RunOCR(imagePath string) ([]*MinerUVlBlock, error) {
 		return nil, err
 	}
 	defer originImage.Close()
-	// 版面分析模型识别
+
+	//layoutDetResult, err := session.layoutDetect(originImage)
+
+	//// 版面分析模型识别
 	layoutDetResult, err := session.LayoutDetSession.Run(originImage)
 	if err != nil {
 		return nil, err
@@ -200,4 +209,34 @@ func (session *MinerUVl) predict(request ChatCompletionRequest) (*ChatCompletion
 
 	return &result, nil
 
+}
+
+func (session *MinerUVl) layoutDetect(originImage *gocv.Mat) ([]*common.LayoutDetResult, error) {
+	resizeMat := gocv.NewMat()
+	defer resizeMat.Close()
+	err := gocv.Resize(*originImage, &resizeMat, image.Pt(session.LayoutImageSize[0], session.LayoutImageSize[1]), 0, 0, gocv.InterpolationCubic)
+
+	if err != nil {
+		return nil, fmt.Errorf("session resize failed: %v", err)
+	}
+
+	//scaleW := float32(session.LayoutImageSize[0]) / float32(originImage.Cols())
+	//scaleH := float32(session.LayoutImageSize[1]) / float32(originImage.Rows())
+
+	base64Str, err := matToBase64(&resizeMat)
+
+	req := NewMinerUVlChatCompletionRequest(
+		session.Model,
+		base64Str,
+		session.getTask("[layout]"),
+	)
+
+	resp, err := session.predict(req)
+	if err != nil {
+		return nil, fmt.Errorf("session predict [layout]  failed: %v", err)
+	}
+	ocrResult := resp.Choices[0].Message.Content
+	println(ocrResult)
+
+	return nil, nil
 }
