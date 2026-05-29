@@ -55,14 +55,14 @@ func NewMinerUVlChatCompletionRequest(modelName string,
 	}
 
 	return ChatCompletionRequest{
-		Model:             modelName,
-		Messages:          messages,
-		Temperature:       0.0,
-		TopK:              1,
-		TopP:              0.01,
-		PresencePenalty:   1,
-		FrequencyPenalty:  0.05,
-		RepetitionPenalty: 1,
+		Model:       modelName,
+		Messages:    messages,
+		Temperature: 0,
+		TopK:        1,
+		TopP:        0.01,
+		//PresencePenalty:   1, 这些参数导致表格识别错乱了，会出现多一行
+		//FrequencyPenalty:  0.05,
+		//RepetitionPenalty: 1,
 		SkipSpecialTokens: false,
 		VllmXargs:         vllmXargs,
 	}
