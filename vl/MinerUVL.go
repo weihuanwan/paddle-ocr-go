@@ -118,6 +118,12 @@ func (session *MinerUVl) getLayoutParsingResults(
 	originImage *gocv.Mat,
 ) []*MinerUVlBlock {
 
+	layoutDetResult = filterInternalLayoutBlocks(layoutDetResult,
+		[]string{"image", "chart"},
+		[]string{"text", "equation", "image_block"},
+		0.9,
+	)
+
 	filterLayoutDetResult := filterOverlapBoxes(layoutDetResult, "auto")
 	final := make([]*MinerUVlBlock, 0, len(filterLayoutDetResult))
 	for i := 0; i < len(filterLayoutDetResult); i++ {
@@ -349,16 +355,25 @@ func (session *MinerUVl) layoutDetect(originImage *gocv.Mat) ([]*common.LayoutDe
 
 		layoutDetResults = append(layoutDetResults, layoutDetResult)
 	}
-
-	return filterTableInternalLayoutBlocks(layoutDetResults), nil
-}
-func filterTableInternalLayoutBlocks(blocks []*common.LayoutDetResult) []*common.LayoutDetResult {
-	layoutDetResults := make([]*common.LayoutDetResult, 0, len(blocks))
-	blockIndex := common.FindCoveredBlockIndices(blocks,
-		[]string{"table"},
+	layoutDetResults = filterInternalLayoutBlocks(layoutDetResults, []string{"table"},
 		[]string{"text", "equation", "equation_block"},
-		0.9,
+		0.9)
+	return layoutDetResults, nil
+}
+func filterInternalLayoutBlocks(blocks []*common.LayoutDetResult, containerTypes []string,
+	candidateTypes []string,
+
+	threshold float64) []*common.LayoutDetResult {
+
+	blockIndex := common.FindCoveredBlockIndices(blocks,
+		containerTypes,
+		candidateTypes,
+		threshold,
 	)
+	if len(blockIndex) == 0 {
+		return blocks
+	}
+	layoutDetResults := make([]*common.LayoutDetResult, 0, len(blocks)-len(blockIndex))
 	for i := 0; i < len(blocks); i++ {
 		if !slices.Contains(blockIndex, i) {
 			layoutDetResults = append(layoutDetResults, blocks[i])
