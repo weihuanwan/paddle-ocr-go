@@ -270,6 +270,9 @@ func (session *MinerUVl) layoutDetect(originImage *gocv.Mat) ([]*common.LayoutDe
 		return nil, fmt.Errorf("session predict [layout]  failed: %v", err)
 	}
 	output := resp.Choices[0].Message.Content
+	if output == "" {
+		return nil, nil
+	}
 
 	// 注意：strings.Split 会去掉分隔符，需要加回来
 	parts := strings.Split(output, "<|box_start|>")
