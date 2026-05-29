@@ -6,6 +6,7 @@ import (
 	"image"
 	"image/color"
 	"math"
+	"slices"
 	"sort"
 
 	"gocv.io/x/gocv"
@@ -300,4 +301,91 @@ func CropByBoxes(layoutDet *LayoutDetResult, imageMat *gocv.Mat) (*gocv.Mat, err
 		return nil, fmt.Errorf("failed to crop image: %v", err)
 	}
 	return &result, nil
+}
+
+// FindCoveredBlockIndices 返回被容器块覆盖的块索引集合
+func FindCoveredBlockIndices(
+	blocks []*LayoutDetResult,
+	containerTypes []string,
+	candidateTypes []string,
+
+	threshold float64,
+) []int {
+	// 索引
+	containerIndices := make([]int, 0)
+	for i := 0; i < len(blocks); i++ {
+		block := blocks[i]
+		// 判断是否是这个容器
+		if slices.Contains(containerTypes, block.Label) {
+			containerIndices = append(containerIndices, i)
+		}
+	}
+	coveredIndices := make([]int, 0)
+	if len(containerIndices) == 0 {
+		return coveredIndices
+	}
+
+	for idx := 0; idx < len(blocks); idx++ {
+		block := blocks[idx]
+		// 如果不是这个候选类型跳过
+		if slices.Contains(candidateTypes, block.Label) {
+			continue
+		}
+		for containerIdx := 0; containerIdx < len(containerIndices); containerIdx++ {
+			// 证明是同一个
+			if idx == containerIdx {
+				continue
+			}
+			if BboxCoverRatio(block.Point, blocks[containerIdx].Point) >= threshold {
+				coveredIndices = append(coveredIndices, idx)
+				break
+			}
+
+		}
+	}
+
+	return coveredIndices
+}
+func bboxIntersectionArea(a, b []float64) float64 {
+	if len(a) < 4 || len(b) < 4 {
+		return 0.0
+	}
+
+	x1 := math.Max(a[0], b[0])
+	y1 := math.Max(a[1], b[1])
+	x2 := math.Min(a[2], b[2])
+	y2 := math.Min(a[3], b[3])
+
+	if x2 <= x1 || y2 <= y1 {
+		return 0.0
+	}
+
+	return (x2 - x1) * (y2 - y1)
+}
+
+// bboxCoverRatio 计算 inner 被 outer 覆盖的面积比例
+// inner, outer 格式: [x1, y1, x2, y2]
+// 返回: 0.0 ~ 1.0
+func bboxCoverRatio(inner, outer []float64) float64 {
+
+	innerWidth := math.Max(0.0, inner[2]-inner[0])
+	innerHeight := math.Max(0.0, inner[3]-inner[1])
+	innerArea := innerWidth * innerHeight
+
+	if innerArea == 0 {
+		return 0.0
+	}
+
+	return bboxIntersectionArea(inner, outer) / innerArea
+}
+
+func BboxCoverRatio(inner, outer []int) float64 {
+	if len(inner) < 4 || len(outer) < 4 {
+		return 0.0
+	}
+	return bboxCoverRatio(
+		[]float64{float64(inner[0]), float64(inner[1]), float64(inner[2]), float64(inner[3])},
+		[]float64{float64(outer[0]), float64(outer[1]), float64(outer[2]), float64(outer[3])},
+	)
+
 }

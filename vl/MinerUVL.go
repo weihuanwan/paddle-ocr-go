@@ -9,6 +9,7 @@ import (
 	"math"
 	"net/http"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -333,6 +334,7 @@ func (session *MinerUVl) layoutDetect(originImage *gocv.Mat) ([]*common.LayoutDe
 		}
 		if angle == nil {
 			fmt.Println("No angle found in layout output line", "block", blockStr)
+			continue
 		}
 
 		tail := strings.TrimSpace(m[7])
@@ -347,5 +349,20 @@ func (session *MinerUVl) layoutDetect(originImage *gocv.Mat) ([]*common.LayoutDe
 
 		layoutDetResults = append(layoutDetResults, layoutDetResult)
 	}
-	return layoutDetResults, nil
+
+	return filterTableInternalLayoutBlocks(layoutDetResults), nil
+}
+func filterTableInternalLayoutBlocks(blocks []*common.LayoutDetResult) []*common.LayoutDetResult {
+	layoutDetResults := make([]*common.LayoutDetResult, 0, len(blocks))
+	blockIndex := common.FindCoveredBlockIndices(blocks,
+		[]string{"table"},
+		[]string{"text", "equation", "equation_block"},
+		0.9,
+	)
+	for i := 0; i < len(blocks); i++ {
+		if !slices.Contains(blockIndex, i) {
+			layoutDetResults = append(layoutDetResults, blocks[i])
+		}
+	}
+	return layoutDetResults
 }
