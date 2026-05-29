@@ -20,5 +20,6 @@ type LayoutDetResult struct {
 	Score         float32       // 置信度
 	Order         int           // 排序
 	Point         []int         // 四边形 4个点位置
+	Angle         int           // 旋转角度
 	PolygonPoints []image.Point // 多边形位置
 }

@@ -350,6 +350,7 @@ func (session *MinerUVl) layoutDetect(originImage *gocv.Mat) ([]*common.LayoutDe
 		}
 		layoutDetResult := &common.LayoutDetResult{
 			Label: refType,
+			Angle: *angle,
 			Point: []int{x1, y1, x2, y2},
 		}
 
