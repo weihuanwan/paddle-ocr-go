@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/weihuanwan/paddleocr-go/common"
+	"github.com/weihuanwan/paddleocr-go/utils"
 	"gocv.io/x/gocv"
 )
 
@@ -148,7 +149,7 @@ func (session *MinerUVl) getLayoutParsingResults(
 		text := ocrResult
 
 		if detResult.Label == "table" {
-			text = ConvertOtslToHtml(ocrResult)
+			text = utils.ConvertOtslToHtml(ocrResult)
 		}
 
 		block := &MinerUVlBlock{
