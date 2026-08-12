@@ -35,7 +35,7 @@ func main() {
 	paddleOCRVL := vl.NewDefaultPaddleOCRVL("PaddlePaddle/PaddleOCR-VL-1.6",
 		"http://localhost:8000/v1/chat/completions", "sk-ufajxhcyibsxcatybmjqhaierwwbbxjdrhwitcmrscyodhsq", docLayoutSession)
 
-	imagePath := "test/images/layout1.png"
+	imagePath := "test/images/img.png"
 	//
 	//imageMat := gocv.IMRead(imagePath, gocv.IMReadColor)
 	//defer imageMat.Close()

@@ -10,6 +10,7 @@ import (
 
 	"github.com/weihuanwan/paddleocr-go/common"
 	"github.com/weihuanwan/paddleocr-go/layout"
+	"github.com/weihuanwan/paddleocr-go/utils"
 	"gocv.io/x/gocv"
 )
 
@@ -127,7 +128,7 @@ func (session *PaddleOCRVL) getLayoutParsingResults(
 		text := ocrResult
 
 		if detResult.Label == "table" {
-			text = ConvertOtslToHtml(ocrResult)
+			text = utils.ConvertOtslToHtml(ocrResult)
 		}
 
 		block := &PaddleOCRVLBlock{
@@ -176,7 +177,7 @@ func (session *PaddleOCRVL) Run(request ChatCompletionRequest) (*ChatCompletionR
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+session.ApiKey)
+	req.Header.Set("Authorization", session.ApiKey)
 
 	// 6️⃣ 发请求
 	client := &http.Client{}
