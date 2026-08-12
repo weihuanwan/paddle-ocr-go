@@ -5,6 +5,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	nethtml "golang.org/x/net/html"
 )
 
 /*
@@ -629,4 +631,188 @@ func extractTokensAndText(s string) ([]string, []string) {
 	}
 
 	return tokens, textParts
+}
+
+/*
+*
+HTML 转 OTSL
+*/
+func ConvertHtmlToOtsl(htmlInput string) (string, error) {
+	doc, err := nethtml.Parse(strings.NewReader(htmlInput))
+	if err != nil {
+		return "", err
+	}
+
+	tableNode := findTableNode(doc)
+	if tableNode == nil {
+		return "", nil
+	}
+
+	// ---------- 1. 收集原始单元格 ----------
+	type rawCell struct {
+		text    string
+		rowspan int
+		colspan int
+	}
+
+	var rows [][]rawCell
+	trNodes := collectRows(tableNode)
+	for _, tr := range trNodes {
+		var row []rawCell
+		for td := tr.FirstChild; td != nil; td = td.NextSibling {
+			if td.Type != nethtml.ElementNode || (td.Data != "td" && td.Data != "th") {
+				continue
+			}
+			text := extractNodeText(td)
+			rowspan, colspan := 1, 1
+			for _, attr := range td.Attr {
+				switch attr.Key {
+				case "rowspan":
+					if v, err := strconv.Atoi(attr.Val); err == nil && v > 0 {
+						rowspan = v
+					}
+				case "colspan":
+					if v, err := strconv.Atoi(attr.Val); err == nil && v > 0 {
+						colspan = v
+					}
+				}
+			}
+			row = append(row, rawCell{text: text, rowspan: rowspan, colspan: colspan})
+		}
+		if len(row) > 0 {
+			rows = append(rows, row)
+		}
+	}
+
+	if len(rows) == 0 {
+		return "", nil
+	}
+
+	// ---------- 2. 计算网格尺寸 ----------
+	numCols := 0
+	for _, row := range rows {
+		cols := 0
+		for _, cell := range row {
+			cols += cell.colspan
+		}
+		if cols > numCols {
+			numCols = cols
+		}
+	}
+	numRows := len(rows)
+
+	// ---------- 3. 构建归属网格 ----------
+	type owner struct{ row, col int }
+	grid := make([][]*owner, numRows)
+	for i := range grid {
+		grid[i] = make([]*owner, numCols)
+	}
+
+	cellContents := make(map[[2]int]string)
+
+	for r, row := range rows {
+		c := 0
+		for _, cell := range row {
+			// 跳过已被 rowspan/colspan 占用的位置
+			for c < numCols && grid[r][c] != nil {
+				c++
+			}
+			if c >= numCols {
+				break
+			}
+
+			key := [2]int{r, c}
+			cellContents[key] = cell.text
+
+			for rr := 0; rr < cell.rowspan; rr++ {
+				if r+rr >= numRows {
+					break
+				}
+				for cc := 0; cc < cell.colspan; cc++ {
+					if c+cc >= numCols {
+						break
+					}
+					grid[r+rr][c+cc] = &owner{row: r, col: c}
+				}
+			}
+			c++
+		}
+	}
+
+	// ---------- 4. 生成 OTSL ----------
+	var sb strings.Builder
+	for r := 0; r < numRows; r++ {
+		for c := 0; c < numCols; c++ {
+			o := grid[r][c]
+			if o == nil {
+				// 不规范的 HTML 缺列，用空单元格补齐
+				sb.WriteString(OTSL_ECEL)
+				continue
+			}
+
+			if o.row == r && o.col == c {
+				// 原始单元格起点
+				content := cellContents[[2]int{r, c}]
+				if strings.TrimSpace(content) == "" {
+					sb.WriteString(OTSL_ECEL)
+				} else {
+					sb.WriteString(OTSL_FCEL)
+					sb.WriteString(content)
+				}
+			} else if o.row == r && o.col < c {
+				// 仅被左侧 colspan 覆盖
+				sb.WriteString(OTSL_LCEL)
+			} else if o.row < r && o.col == c {
+				// 仅被上方 rowspan 覆盖
+				sb.WriteString(OTSL_UCEL)
+			} else if o.row < r && o.col < c {
+				// 同时被左、上覆盖
+				sb.WriteString(OTSL_XCEL)
+			}
+		}
+		sb.WriteString(OTSL_NL)
+	}
+
+	return sb.String(), nil
+}
+
+// 在 DOM 中查找第一个 <table>
+func findTableNode(n *nethtml.Node) *nethtml.Node {
+	if n.Type == nethtml.ElementNode && n.Data == "table" {
+		return n
+	}
+	for c := n.FirstChild; c != nil; c = c.NextSibling {
+		if found := findTableNode(c); found != nil {
+			return found
+		}
+	}
+	return nil
+}
+
+// 收集 table/thead/tbody/tfoot 下的所有 <tr>（不进入 <td>，避免嵌套表格干扰）
+func collectRows(n *nethtml.Node) []*nethtml.Node {
+	var rows []*nethtml.Node
+	for c := n.FirstChild; c != nil; c = c.NextSibling {
+		if c.Type != nethtml.ElementNode {
+			continue
+		}
+		if c.Data == "tr" {
+			rows = append(rows, c)
+		} else if c.Data == "thead" || c.Data == "tbody" || c.Data == "tfoot" {
+			rows = append(rows, collectRows(c)...)
+		}
+	}
+	return rows
+}
+
+// 提取节点下的纯文本（去掉内部 HTML 标签）
+func extractNodeText(n *nethtml.Node) string {
+	if n.Type == nethtml.TextNode {
+		return n.Data
+	}
+	var sb strings.Builder
+	for c := n.FirstChild; c != nil; c = c.NextSibling {
+		sb.WriteString(extractNodeText(c))
+	}
+	return strings.TrimSpace(sb.String())
 }

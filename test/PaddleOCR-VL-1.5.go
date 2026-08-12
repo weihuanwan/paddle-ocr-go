@@ -6,6 +6,7 @@ import (
 
 	"github.com/weihuanwan/paddleocr-go/layout"
 	"github.com/weihuanwan/paddleocr-go/ocr"
+	"github.com/weihuanwan/paddleocr-go/utils"
 	"github.com/weihuanwan/paddleocr-go/vl"
 	ort "github.com/yalue/onnxruntime_go"
 )
@@ -35,7 +36,7 @@ func main() {
 	paddleOCRVL := vl.NewDefaultPaddleOCRVL("PaddlePaddle/PaddleOCR-VL-1.6",
 		"http://localhost:8000/v1/chat/completions", "sk-ufajxhcyibsxcatybmjqhaierwwbbxjdrhwitcmrscyodhsq", docLayoutSession)
 
-	imagePath := "test/images/img.png"
+	imagePath := "test/images/table_recognition1.jpg"
 	//
 	//imageMat := gocv.IMRead(imagePath, gocv.IMReadColor)
 	//defer imageMat.Close()
@@ -49,6 +50,11 @@ func main() {
 		block := paddleOCRVLBlocks[i]
 		fmt.Println(block.Label)
 		fmt.Println(block.Text)
+		if block.Label == "table" {
+			otsl, _ := utils.ConvertHtmlToOtsl(block.Text)
+			fmt.Println(otsl)
+		}
+
 		fmt.Println("----------------------------")
 	}
 
