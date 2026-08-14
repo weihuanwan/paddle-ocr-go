@@ -1,10 +1,8 @@
 package layout
 
 import (
-	"errors"
 	"fmt"
 	"image"
-	"image/color"
 	"math"
 	"slices"
 	"sort"
@@ -27,26 +25,6 @@ type LayoutDetSession struct {
 	Labels               []string // 标签字典
 	LayoutMergeBoxesMode []string // 标签字典
 	Threshold            float32  // 置信度 默认 0.3
-}
-type LayoutDetBox struct {
-	ClsId int
-	Label string
-	Score float32
-	Order int
-
-	Point [4]int
-
-	Mask []int32
-}
-
-// 版面分析返回结果
-type LayoutDetResult struct {
-	ClsId         int           // 标签的 id
-	Label         string        // 标签
-	Score         float32       // 置信度
-	Order         int           // 排序
-	Point         []int         // 四边形 4个点位置
-	PolygonPoints []image.Point // 多边形位置
 }
 
 func NewLayoutDetSession(onnxSession *ort.DynamicAdvancedSession) *LayoutDetSession {
@@ -90,7 +68,7 @@ func NewLayoutDetSession(onnxSession *ort.DynamicAdvancedSession) *LayoutDetSess
 	}
 }
 
-func (layoutDet *LayoutDetSession) Run(originImage *gocv.Mat) ([]*LayoutDetResult, error) {
+func (layoutDet *LayoutDetSession) Run(originImage *gocv.Mat) ([]*common.LayoutDetResult, error) {
 	// 缩放
 	resizedImage, scale, err := layoutDet.resize(originImage)
 	if err != nil {
@@ -194,11 +172,11 @@ func (layoutDet *LayoutDetSession) resize(imageMat *gocv.Mat) (*gocv.Mat, []floa
 
 func (layoutDet *LayoutDetSession) formatOutput(boxes []float32, count []int32,
 	masks []int32, originImageH int, originImageW int,
-	scale []float32) ([]*LayoutDetResult, error) {
+	scale []float32) ([]*common.LayoutDetResult, error) {
 
 	step := 7
 	maskSize := 200 * 200
-	layoutDetBoxs := make([]LayoutDetBox, 0)
+	layoutDetBoxs := make([]common.LayoutDetBox, 0)
 	// 1. 处理图片
 	for i := 0; i < len(boxes); i += step {
 
@@ -216,7 +194,7 @@ func (layoutDet *LayoutDetSession) formatOutput(boxes []float32, count []int32,
 			xmax := int(math.Round(float64(boxes[i+4])))
 			ymax := int(math.Round(float64(boxes[i+5])))
 			order := int(boxes[i+6])
-			layoutDetResult := LayoutDetBox{
+			layoutDetResult := common.LayoutDetBox{
 				ClsId: clsId,
 				Score: score,
 				Order: order,
@@ -229,9 +207,9 @@ func (layoutDet *LayoutDetSession) formatOutput(boxes []float32, count []int32,
 	}
 
 	// 解决同一个区域出现多个标签问题，取最高的，过滤最低的
-	layoutDetResultNMS := NMSLayout(layoutDetBoxs, 0.6, 0.98)
+	layoutDetResultNMS := common.NMSLayout(layoutDetBoxs, 0.6, 0.98)
 
-	filteredBoxes := make([]LayoutDetBox, 0)
+	filteredBoxes := make([]common.LayoutDetBox, 0)
 	// 处理版面分析把当前输入的图片当做图片输出问题
 	if len(layoutDetResultNMS) > 0 {
 		areaThres := 0.93
@@ -261,7 +239,7 @@ func (layoutDet *LayoutDetSession) formatOutput(boxes []float32, count []int32,
 
 	// 解决一个大区域内存在小标签问题。如:一个表格内是存在文本标签问题
 	filteredBoxesLen := len(filteredBoxes)
-	keepMaskBoxes := make([]LayoutDetBox, 0, filteredBoxesLen)
+	keepMaskBoxes := make([]common.LayoutDetBox, 0, filteredBoxesLen)
 	if filteredBoxesLen > 0 {
 		keepMask := slices.Repeat([]bool{true}, filteredBoxesLen)
 
@@ -317,9 +295,9 @@ func (layoutDet *LayoutDetSession) formatOutput(boxes []float32, count []int32,
 	return layoutDetResults, nil
 }
 
-func restructuredBoxes(boxes []LayoutDetBox, polygonPoints [][]image.Point, layoutUnclipRatio []float64, originImageH, originImageW int) []*LayoutDetResult {
+func restructuredBoxes(boxes []common.LayoutDetBox, polygonPoints [][]image.Point, layoutUnclipRatio []float64, originImageH, originImageW int) []*common.LayoutDetResult {
 
-	layoutDetResults := make([]*LayoutDetResult, 0, len(boxes))
+	layoutDetResults := make([]*common.LayoutDetResult, 0, len(boxes))
 
 	for i := 0; i < len(boxes); i++ {
 		box := boxes[i]
@@ -345,7 +323,7 @@ func restructuredBoxes(boxes []LayoutDetBox, polygonPoints [][]image.Point, layo
 			continue
 		}
 
-		layoutDetResult := &LayoutDetResult{
+		layoutDetResult := &common.LayoutDetResult{
 			ClsId: box.ClsId,
 			Label: box.Label,
 			Score: box.Score,
@@ -370,138 +348,7 @@ func restructuredBoxes(boxes []LayoutDetBox, polygonPoints [][]image.Point, layo
 	return layoutDetResults
 }
 
-/*
-解决同一个区域出现多个标签问题，取最高的，过滤最低的
-*/
-func NMSLayout(boxes []LayoutDetBox, iouSame, iouDiff float64) []LayoutDetBox {
-
-	if len(boxes) == 0 {
-		return boxes
-	}
-
-	// 对应 从大到小 排序
-	sort.Slice(boxes, func(i, j int) bool {
-		return boxes[i].Score > boxes[j].Score
-	})
-
-	var selected []LayoutDetBox
-
-	// 对应 Python: while len(indices) > 0
-	for len(boxes) > 0 {
-
-		// current = indices[0]
-		currentBox := boxes[0]
-		// 当前的添加进去
-		selected = append(selected, currentBox)
-
-		var remaining []LayoutDetBox
-
-		// for i in indices:
-		for i := 1; i < len(boxes); i++ {
-			// 获取下一个
-			nextBox := boxes[i]
-
-			// box_class
-			nextBoxClass := nextBox.ClsId
-			currentClass := currentBox.ClsId
-
-			// iou
-			iouValue := IoU(currentBox, nextBox)
-
-			// threshold = iou_same if same class else iou_diff
-			threshold := iouDiff
-			// 判断类型是否一致
-			if currentClass == nextBoxClass {
-				// 如果类型是一致 使用0.6
-				threshold = iouSame
-			}
-
-			// if iou < threshold → keep
-			if iouValue < threshold {
-				remaining = append(remaining, nextBox)
-			}
-		}
-
-		boxes = remaining
-	}
-
-	return selected
-}
-
-func IoU(a, b LayoutDetBox) float64 {
-
-	/**
-	框 A                框 B
-	(x1,y1)             (x1p,y1p)
-	   ┌────────┐
-	   │    A   │
-	   │    ┌────────┐
-	   │    │   B    │
-	   └────┴────────┘
-			(x2,y2)   (x2p,y2p)
-
-	┌──────────────┐
-	│              │
-	│      A       │
-	│      ┌──────────────┐
-	│      │重叠区域 |     │
-	└──────┴──────────────┘
-	       │       B      │
-	       └──────────────┘
-	*/
-	//minX := box.Point[0].X
-	//minY := box.Point[0].Y
-	//maxX := box.Point[1].X
-	//maxY := box.Point[1].Y
-	//
-	//boxW, boxH := maxX-minX, maxY-minY
-	//
-	//// 默认矩形（四个顶点，顺序：左上、右上、右下、左下）
-	//rect := []image.Point{
-	//	{minX, minY},
-	//	{maxX, minY},
-	//	{maxX, maxY},
-	//	{minX, maxY},
-	//}
-
-	//取坐标
-
-	x1 := float64(a.Point[0])
-	y1 := float64(a.Point[1])
-	x2 := float64(a.Point[2])
-	y2 := float64(a.Point[3])
-
-	x1p := float64(b.Point[0])
-	y1p := float64(b.Point[1])
-	x2p := float64(b.Point[2])
-	y2p := float64(b.Point[3])
-
-	// intersection
-	x1i := math.Max(x1, x1p)
-	y1i := math.Max(y1, y1p)
-
-	x2i := math.Min(x2, x2p)
-	y2i := math.Min(y2, y2p)
-
-	// 计算交集面积
-	interW := math.Max(0, x2i-x1i+1)
-	interH := math.Max(0, y2i-y1i+1)
-	interArea := interW * interH
-	// 计算两个框各自面积
-	area1 := (x2 - x1 + 1) * (y2 - y1 + 1)
-	area2 := (x2p - x1p + 1) * (y2p - y1p + 1)
-
-	// 并集面积
-	union := area1 + area2 - interArea
-	if union <= 0 {
-		return 0
-	}
-	// 交集面积 / 并集面积
-
-	return interArea / union
-}
-
-func extractPolygonPointsByMasks(layoutDetBox []LayoutDetBox,
+func extractPolygonPointsByMasks(layoutDetBox []common.LayoutDetBox,
 	scale []float32, layoutShapeMode string) [][]image.Point {
 
 	scaleH := scale[0] / 4
@@ -783,7 +630,7 @@ func mask2polygon(mask gocv.Mat, maxAllowedDist int) []image.Point {
 
 }
 
-func checkContainment(boxes []LayoutDetBox, categoryIndex int, mode string) ([]bool, []bool) {
+func checkContainment(boxes []common.LayoutDetBox, categoryIndex int, mode string) ([]bool, []bool) {
 	n := len(boxes)
 	//我包含了别人
 	containsOther := make([]bool, n)
@@ -823,7 +670,7 @@ func checkContainment(boxes []LayoutDetBox, categoryIndex int, mode string) ([]b
 	return containsOther, containedByOther
 }
 
-func IsContained(box1, box2 LayoutDetBox) bool {
+func IsContained(box1, box2 common.LayoutDetBox) bool {
 
 	x1, y1, x2, y2 := box1.Point[0], box1.Point[1], box1.Point[2], box1.Point[3]
 	x1_p, y1_p, x2_p, y2_p := box2.Point[0], box2.Point[1], box2.Point[2], box2.Point[3]
@@ -1191,66 +1038,4 @@ func convertPolygonToQuad(polygon []image.Point) []image.Point {
 	}
 
 	return result
-}
-
-func CropByBoxes(layoutDet *LayoutDetResult, imageMat gocv.Mat) (*gocv.Mat, error) {
-	// 参数校验
-	if layoutDet == nil {
-		return nil, errors.New("layoutDet is nil")
-	}
-	if imageMat.Empty() {
-		return nil, errors.New("imageMat is empty")
-	}
-	if len(layoutDet.Point) != 4 {
-		return nil, errors.New("invalid point format, expected [xmin, ymin, xmax, ymax]")
-	}
-
-	xmin, ymin, xmax, ymax := layoutDet.Point[0], layoutDet.Point[1], layoutDet.Point[2], layoutDet.Point[3]
-
-	rect := image.Rect(xmin, ymin, xmax, ymax)
-	region := imageMat.Region(rect)
-
-	// 无多边形时直接返回副本（避免原图释放后region失效）
-	if len(layoutDet.PolygonPoints) == 0 {
-		result := region.Clone()
-		return &result, nil
-	}
-
-	// 创建mask
-	mask := gocv.NewMatWithSize(region.Rows(), region.Cols(), gocv.MatTypeCV8U)
-	defer mask.Close()
-
-	// 构建局部坐标的多边形
-	pts := make([]image.Point, 0, len(layoutDet.PolygonPoints))
-	for _, p := range layoutDet.PolygonPoints {
-		// 转换为相对于裁剪区域的坐标
-		localX := p.X - xmin
-		localY := p.Y - ymin
-		// 检查转换后的坐标是否在有效范围内
-		pts = append(pts, image.Pt(localX, localY))
-	}
-
-	// 填充多边形
-	pointsVector := gocv.NewPointsVectorFromPoints([][]image.Point{pts})
-	defer pointsVector.Close() // 修复：释放资源
-
-	err := gocv.FillPoly(&mask, pointsVector, color.RGBA{255, 255, 255, 0})
-	if err != nil {
-		return nil, fmt.Errorf("failed to fill polygon points: %w", err)
-	}
-	// 创建结果图（透明背景更通用，或根据需求改为白色）
-	result := gocv.NewMatWithSize(region.Rows(), region.Cols(), region.Type())
-
-	// 设置背景色（白色）
-	err = gocv.Rectangle(&result, image.Rect(0, 0, result.Cols(), result.Rows()),
-		color.RGBA{255, 255, 255, 0}, -1)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fill rectangle: %v", err)
-	}
-	// 应用mask拷贝有效区域
-	err = region.CopyToWithMask(&result, mask)
-	if err != nil {
-		return nil, fmt.Errorf("failed to crop image: %v", err)
-	}
-	return &result, nil
 }

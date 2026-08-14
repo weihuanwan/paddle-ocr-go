@@ -6,9 +6,8 @@ import (
 	"image/color"
 	"log"
 
-	"github.com/weihuanwan/paddleocr-go/common"
-	"github.com/weihuanwan/paddleocr-go/layout"
 	"github.com/weihuanwan/paddleocr-go/ocr"
+	"github.com/weihuanwan/paddleocr-go/table"
 	ort "github.com/yalue/onnxruntime_go"
 	"gocv.io/x/gocv"
 )
@@ -26,27 +25,28 @@ func main() {
 	defer options.Destroy()
 	// CLS
 	layoutDetSessionInternal, err := ort.NewDynamicAdvancedSession(
-		"test/model/PP-DocLayoutV3.onnx",
+		"test/model/wired_table_cell_det.onnx",
 		[]string{"im_shape", "image", "scale_factor"},
-		[]string{"fetch_name_0", "fetch_name_1", "fetch_name_2"},
+		[]string{"fetch_name_0", "fetch_name_1"},
 		options,
 	)
 	if err != nil {
 		panic(err)
 	}
 
-	docLayoutSession := layout.NewLayoutDetSession(layoutDetSessionInternal)
+	docLayoutSession := table.NewWiredTableCellsDetOnnxSession(layoutDetSessionInternal)
 
-	imagePath := "test/images/layout1.png"
+	imagePath := "test/images/table_recognition3.png"
 
 	imageMat := gocv.IMRead(imagePath, gocv.IMReadColor)
+	defer imageMat.Close()
+	originImage1 := imageMat.Clone()
 	layoutDetResults, err := docLayoutSession.Run(&imageMat)
+
 	if err != nil {
 		panic(err)
 	}
-	originImage1 := imageMat.Clone()
 	for i := 0; i < len(layoutDetResults); i++ {
-
 		layoutDet := layoutDetResults[i]
 		point := layoutDet.Point
 
@@ -60,42 +60,29 @@ func main() {
 		// 画矩形
 		gocv.Rectangle(&originImage1, rect, color.RGBA{255, 0, 0, 0}, 1)
 
-		// 写标签
+		// 写标签 - 字体更小，显示在区域中间
 		label := fmt.Sprintf("%s %.2f", layoutDet.Label, layoutDet.Score)
 
-		pt := image.Pt(x1, y1-5)
+		// 计算文本尺寸以居中显示
+		textSize := gocv.GetTextSize(label, gocv.FontHersheySimplex, 0.5, 1)
+
+		// 计算矩形中心
+		centerX := (x1 + x2) / 2
+		centerY := (y1 + y2) / 2
+
+		// 文本左上角坐标（基于中心点偏移）
+		textX := centerX - textSize.X/2
+		textY := centerY + textSize.Y/2
+
+		pt := image.Pt(textX, textY)
+
+		// 字体大小 0.5，线条粗细 1
 		gocv.PutText(&originImage1, label, pt,
 			gocv.FontHersheySimplex,
-			0.7,
+			0.5, // 字体缩放因子，原来是 0.7
 			color.RGBA{0, 255, 0, 0},
-			2)
-
-		// 顺序号
-		orderText := fmt.Sprintf("%d", layoutDet.Order)
-		gocv.PutText(&originImage1, orderText,
-			image.Pt(x1, y1-25),
-			gocv.FontHersheySimplex,
-			0.8,
-			color.RGBA{255, 0, 255, 0},
-			2)
+			1)
 	}
-	//
-	////// 最后统一显示
-	////w := gocv.NewWindow("layout")
-	////w.IMShow(imageMat)
-	////w.WaitKey(0)
-	////保存图片
 	gocv.IMWrite("layout_result.jpg", originImage1)
-	for i := 0; i < len(layoutDetResults); i++ {
-		layoutDet := layoutDetResults[i]
-		cropImage, err := common.CropByBoxes(layoutDet, &imageMat)
-		if err != nil {
-			panic(err)
-		}
-		name := fmt.Sprintf("%dlayout_result.jpg", i)
-
-		gocv.IMWrite(name, *cropImage)
-
-	}
 
 }
