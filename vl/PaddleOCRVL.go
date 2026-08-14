@@ -97,6 +97,15 @@ func (session *PaddleOCRVL) RunOCR(imagePath string) ([]*PaddleOCRVLBlock, error
 	paddleOCRVLBlocks := session.getLayoutParsingResults(layoutDetResult, originImage)
 	return paddleOCRVLBlocks, nil
 }
+func (session *PaddleOCRVL) RunOCRFromMat(originImage *gocv.Mat) ([]*PaddleOCRVLBlock, error) {
+	// 版面分析模型识别
+	layoutDetResult, err := session.LayoutDetSession.Run(originImage)
+	if err != nil {
+		return nil, err
+	}
+	paddleOCRVLBlocks := session.getLayoutParsingResults(layoutDetResult, originImage)
+	return paddleOCRVLBlocks, nil
+}
 
 func (session *PaddleOCRVL) getLayoutParsingResults(
 	layoutDetResult []*common.LayoutDetResult,
@@ -172,8 +181,7 @@ func (session *PaddleOCRVL) Run(request ChatCompletionRequest) (*ChatCompletionR
 		bytes.NewBuffer(reqBody),
 	)
 	if err != nil {
-
-		return nil, fmt.Errorf("send api error %s  %s", session.Url, err)
+		return nil, fmt.Errorf("req error %s  %s", session.Url, err)
 	}
 
 	req.Header.Set("Content-Type", "application/json")
@@ -183,7 +191,7 @@ func (session *PaddleOCRVL) Run(request ChatCompletionRequest) (*ChatCompletionR
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		panic(err)
+		return nil, fmt.Errorf("send api error %s  %s", session.Url, err)
 	}
 	defer resp.Body.Close()
 
