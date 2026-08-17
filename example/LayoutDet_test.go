@@ -1,10 +1,11 @@
-package main
+package example
 
 import (
 	"fmt"
 	"image"
 	"image/color"
 	"log"
+	"testing"
 
 	"github.com/weihuanwan/paddleocr-go/common"
 	"github.com/weihuanwan/paddleocr-go/layout"
@@ -13,11 +14,11 @@ import (
 	"gocv.io/x/gocv"
 )
 
-func main() {
+func TestDocLayoutV3(t *testing.T) {
 
 	// ✅ session options
 
-	err := ocr.InitOrt("./test/lib/onnxruntime.dll")
+	err := ocr.InitOrt("lib/onnxruntime.dll")
 	if err != nil {
 		log.Fatalf("Error initializing Ort: %v", err)
 	}
@@ -26,7 +27,7 @@ func main() {
 	defer options.Destroy()
 	// CLS
 	layoutDetSessionInternal, err := ort.NewDynamicAdvancedSession(
-		"test/model/PP-DocLayoutV3.onnx",
+		"model/PP-DocLayoutV3.onnx",
 		[]string{"im_shape", "image", "scale_factor"},
 		[]string{"fetch_name_0", "fetch_name_1", "fetch_name_2"},
 		options,
@@ -37,7 +38,7 @@ func main() {
 
 	docLayoutSession := layout.NewLayoutDetSession(layoutDetSessionInternal)
 
-	imagePath := "test/images/layout1.png"
+	imagePath := "images/layout1.png"
 
 	imageMat := gocv.IMRead(imagePath, gocv.IMReadColor)
 	layoutDetResults, err := docLayoutSession.Run(&imageMat)

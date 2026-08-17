@@ -1,7 +1,8 @@
-package main
+package example
 
 import (
 	"fmt"
+	"testing"
 
 	"image"
 	"log"
@@ -16,15 +17,15 @@ type OCRItem struct {
 	Text   string
 }
 
-func main() {
+func TestPaddleOCR(t *testing.T) {
 	// 开始计时
 	start := time.Now()
 	config := ocr.NewDefaultPaddleOCRConfig(
-		"test/lib/onnxruntime.dll",
-		"test/model/det.onnx",
-		"test/model/rec.onnx",
-		"test/model/cls.onnx",
-		"test/model/dict.txt",
+		"lib/onnxruntime.dll",
+		"model/det.onnx",
+		"model/rec.onnx",
+		"model/cls.onnx",
+		"model/dict.txt",
 		false,
 		true,
 	)
@@ -36,7 +37,7 @@ func main() {
 
 	defer session.Destroy()
 
-	imagePath := "test/images/test.jpg"
+	imagePath := "images/test.jpg"
 
 	// 检测
 	ocrResult, _ := session.RunOCR(imagePath)

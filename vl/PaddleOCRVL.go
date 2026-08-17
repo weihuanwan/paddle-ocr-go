@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 
 	"github.com/weihuanwan/paddleocr-go/common"
@@ -129,7 +130,7 @@ func (session *PaddleOCRVL) getLayoutParsingResults(
 
 		resp, err := session.Run(req)
 		if err != nil {
-			fmt.Println(err)
+			log.Fatalf("Error PaddleOCRVL Run: %v", err)
 			continue
 		}
 
