@@ -8,6 +8,8 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"runtime"
+	"sync"
 
 	"github.com/weihuanwan/paddleocr-go/common"
 	"github.com/weihuanwan/paddleocr-go/layout"
@@ -84,12 +86,88 @@ type PaddleOCRVLBlock struct {
 	Text      string
 }
 
-func (session *PaddleOCRVL) RunOCR(imagePath string) ([]*PaddleOCRVLBlock, error) {
-	originImage, _, err := common.LoadImage(imagePath)
-	if err != nil {
-		return nil, err
+// PageResult 封装单页 OCR 结果
+type PageResult struct {
+	PageIndex int                 // 页码（从 0 开始）
+	Mat       gocv.Mat            // 该页图像（调用方负责最终 Close）
+	Blocks    []*PaddleOCRVLBlock // OCR 识别结果
+	Err       error               // 该页处理过程中的错误
+}
+
+// Close 释放该页 Mat
+func (p *PageResult) Close() {
+	p.Mat.Close()
+}
+
+func (session *PaddleOCRVL) Close(pages []*PageResult) {
+	for _, p := range pages {
+		if p != nil {
+			p.Close()
+		}
 	}
-	defer originImage.Close()
+}
+
+// RunOCR 加载并并发 OCR，返回按页码排序的结果
+func (session *PaddleOCRVL) RunOCR(imagePath string) ([]*PageResult, error) {
+	mats, name, err := utils.Load(imagePath)
+	if err != nil {
+		return nil, fmt.Errorf("load %s failed: %w", name, err)
+	}
+
+	n := len(mats)
+	if n == 0 {
+		return nil, fmt.Errorf("no pages loaded from %s", imagePath)
+	}
+
+	results := make([]*PageResult, n)
+
+	// 信号量控制并发数，防止多页 PDF 同时渲染爆内存
+	workers := runtime.NumCPU()
+	if n < workers {
+		workers = n
+	}
+	sem := make(chan struct{}, workers)
+
+	var wg sync.WaitGroup
+	for i := range mats {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+
+			sem <- struct{}{}        // 获取令牌
+			defer func() { <-sem }() // 释放令牌
+
+			blocks, err := session.runOCR(&mats[idx])
+			results[idx] = &PageResult{
+				PageIndex: idx,
+				Mat:       mats[idx],
+				Blocks:    blocks,
+				Err:       err,
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	// 检查是否有页出错，出错时统一清理所有已分配的 Mat
+	var firstErr error
+	for _, r := range results {
+		if r != nil && r.Err != nil && firstErr == nil {
+			firstErr = fmt.Errorf("page %d OCR failed: %w", r.PageIndex, r.Err)
+		}
+	}
+	if firstErr != nil {
+		for _, r := range results {
+			if r != nil {
+				r.Mat.Close()
+			}
+		}
+		return nil, firstErr
+	}
+
+	return results, nil
+}
+
+func (session *PaddleOCRVL) runOCR(originImage *gocv.Mat) ([]*PaddleOCRVLBlock, error) {
 	// 版面分析模型识别
 	layoutDetResult, err := session.LayoutDetSession.Run(originImage)
 	if err != nil {

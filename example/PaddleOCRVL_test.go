@@ -2,30 +2,26 @@ package example
 
 import (
 	"fmt"
-	"log"
-	"os"
 	"testing"
 
 	"github.com/weihuanwan/paddleocr-go/layout"
 	"github.com/weihuanwan/paddleocr-go/ocr"
-	"github.com/weihuanwan/paddleocr-go/utils"
 	"github.com/weihuanwan/paddleocr-go/vl"
 	ort "github.com/yalue/onnxruntime_go"
 )
 
-func TestOcrImage(t *testing.T) {
-	wd, _ := os.Getwd()
-	t.Logf("===== 当前工作目录: %s =====", wd)
+// initSession 抽离公共初始化逻辑
+func initSession(t *testing.T) (*vl.PaddleOCRVL, func()) {
 	err := ocr.InitOrt("lib/onnxruntime.dll")
 	if err != nil {
-
-		log.Fatalf("Error initializing Ort: %v", err)
-		panic(err)
+		t.Fatalf("Error initializing Ort: %v", err)
 	}
 
-	options, _ := ort.NewSessionOptions()
-	defer options.Destroy()
-	// CLS
+	options, err := ort.NewSessionOptions()
+	if err != nil {
+		t.Fatalf("Error creating session options: %v", err)
+	}
+
 	layoutDetSessionInternal, err := ort.NewDynamicAdvancedSession(
 		"model/PP-DocLayoutV3.onnx",
 		[]string{"im_shape", "image", "scale_factor"},
@@ -33,72 +29,43 @@ func TestOcrImage(t *testing.T) {
 		options,
 	)
 	if err != nil {
-		panic(err)
+		options.Destroy()
+		t.Fatalf("Error creating layout session: %v", err)
 	}
 
 	docLayoutSession := layout.NewLayoutDetSession(layoutDetSessionInternal)
 
-	paddleOCRVL := vl.NewDefaultPaddleOCRVL("PaddlePaddle/PaddleOCR-VL-1.6",
-		"http://localhost:8000/v1/chat/completions", "sk-ufajxhcyibsxcatybmjqhaierwwbbxjdrhwitcmrscyodhsq", docLayoutSession)
+	paddleOCRVL := vl.NewDefaultPaddleOCRVL(
+		"PaddlePaddle/PaddleOCR-VL-1.6",
+		"http://localhost:8000/v1/chat/completions",
+		"sk-ufajxhcyibsxcatybmjqhaierwwbbxjdrhwitcmrscyodhsq",
+		docLayoutSession,
+	)
 
-	imagePath := "images/test.jpg"
-	paddleOCRVLBlocks, err := paddleOCRVL.RunOCR(imagePath)
-	if err != nil {
-		panic(err)
+	cleanup := func() {
+		options.Destroy()
 	}
-
-	for i := 0; i < len(paddleOCRVLBlocks); i++ {
-		block := paddleOCRVLBlocks[i]
-		fmt.Println(block.Label)
-		fmt.Println(block.Text)
-	}
+	return paddleOCRVL, cleanup
 }
 
-func TestOcrPdf(t *testing.T) {
-
-	err := ocr.InitOrt("lib/onnxruntime.dll")
-	if err != nil {
-		log.Fatalf("Error initializing Ort: %v", err)
-	}
-
-	options, _ := ort.NewSessionOptions()
-	defer options.Destroy()
-	// CLS
-	layoutDetSessionInternal, err := ort.NewDynamicAdvancedSession(
-		"model/PP-DocLayoutV3.onnx",
-		[]string{"im_shape", "image", "scale_factor"},
-		[]string{"fetch_name_0", "fetch_name_1", "fetch_name_2"},
-		options,
-	)
-	if err != nil {
-		panic(err)
-	}
-
-	docLayoutSession := layout.NewLayoutDetSession(layoutDetSessionInternal)
-
-	paddleOCRVL := vl.NewDefaultPaddleOCRVL("PaddlePaddle/PaddleOCR-VL-1.6",
-		"http://localhost:8000/v1/chat/completions", "sk-ufajxhcyibsxcatybmjqhaierwwbbxjdrhwitcmrscyodhsq", docLayoutSession)
+func TestPaddleOCRVL(t *testing.T) {
+	session, cleanup := initSession(t)
+	defer cleanup()
 
 	imagePath := "pdf/test01.pdf"
-
-	mats, err := utils.PDFToMats(imagePath)
-
+	// PDF 会返回多页，内部并发 OCR
+	pages, err := session.RunOCR(imagePath)
 	if err != nil {
-		panic(err)
+		t.Fatalf("RunOCR failed: %v", err)
 	}
 
-	for i := 0; i < len(mats); i++ {
-		paddleOCRVLBlocks, err := paddleOCRVL.RunOCRFromMat(&mats[i])
+	defer session.Close(pages) // 批量释放所有 Mat
 
-		if err != nil {
-			panic(err)
+	for _, page := range pages {
+		t.Logf("===== PDF Page %d | Blocks: %d =====", page.PageIndex+1, len(page.Blocks))
+		for _, block := range page.Blocks {
+			fmt.Printf("Label: %s | Text: %s\n", block.Label, block.Text)
 		}
-
-		for i := 0; i < len(paddleOCRVLBlocks); i++ {
-			block := paddleOCRVLBlocks[i]
-			fmt.Println(block.Label)
-			fmt.Println(block.Text)
-
-		}
+		fmt.Println()
 	}
 }
