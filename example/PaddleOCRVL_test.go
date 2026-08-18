@@ -36,8 +36,8 @@ func initSession(t *testing.T) (*vl.PaddleOCRVL, func()) {
 	docLayoutSession := layout.NewLayoutDetSession(layoutDetSessionInternal)
 
 	paddleOCRVL := vl.NewDefaultPaddleOCRVL(
-		"PaddlePaddle/PaddleOCR-VL-1.6",
-		"http://localhost:8000/v1/chat/completions",
+		"AuditAid/PaddleOCR-VL-1.6-0.9B",
+		"http://localhost:11434/v1/chat/completions",
 		"sk-ufajxhcyibsxcatybmjqhaierwwbbxjdrhwitcmrscyodhsq",
 		docLayoutSession,
 	)
@@ -52,7 +52,7 @@ func TestPaddleOCRVL(t *testing.T) {
 	session, cleanup := initSession(t)
 	defer cleanup()
 
-	imagePath := "pdf/test01.pdf"
+	imagePath := "images/202503.pdf"
 	// PDF 会返回多页，内部并发 OCR
 	pages, err := session.RunOCR(imagePath)
 	if err != nil {
