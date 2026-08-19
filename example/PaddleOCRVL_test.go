@@ -21,6 +21,15 @@ func initSession(t *testing.T) (*vl.PaddleOCRVL, func()) {
 	if err != nil {
 		t.Fatalf("Error creating session options: %v", err)
 	}
+	//cudaOptions, err := ort.NewCUDAProviderOptions()
+	//if err != nil {
+	//	t.Fatalf("create CUDA provider options:%v", err)
+	//}
+	//defer cudaOptions.Destroy()
+	//
+	//if err := options.AppendExecutionProviderCUDA(cudaOptions); err != nil {
+	//	t.Fatalf("append CUDA provider: %", err)
+	//}
 
 	layoutDetSessionInternal, err := ort.NewDynamicAdvancedSession(
 		"model/PP-DocLayoutV3.onnx",

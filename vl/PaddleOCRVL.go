@@ -81,9 +81,7 @@ func NewDefaultPaddleOCRVL(
 
 type PaddleOCRVLBlock struct {
 	*common.LayoutDetResult
-
-	OcrResult string
-	Text      string
+	Text string
 }
 
 // PageResult 封装单页 OCR 结果
@@ -221,7 +219,6 @@ func (session *PaddleOCRVL) getLayoutParsingResults(
 
 		block := &PaddleOCRVLBlock{
 			LayoutDetResult: detResult,
-			OcrResult:       ocrResult,
 			Text:            text,
 		}
 		final = append(final, block)
