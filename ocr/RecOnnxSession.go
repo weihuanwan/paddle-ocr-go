@@ -53,7 +53,9 @@ func (rec *RecOnnxSession) Run(cropImages []*gocv.Mat) []*RecResult {
 		if err != nil {
 			panic(err)
 		}
-		// 获取 序列长度（最多字符数） 五舍六入
+		/**
+		获取 序列长度（最多字符数） 五舍六入，为什么会五舍六入？不知道是不是onnx 转换问题。四舍五入会不对！！！
+		*/
 		seqLen := common.Round06(float64(w) / 8)
 
 		outputTensor, _ := ort.NewEmptyTensor[float32](ort.NewShape(
@@ -63,7 +65,7 @@ func (rec *RecOnnxSession) Run(cropImages []*gocv.Mat) []*RecResult {
 		))
 		err = rec.OnnxSession.Run([]ort.Value{inputTensor}, []ort.Value{outputTensor})
 		if err != nil {
-			panic("rec run error")
+			panic(err)
 		}
 
 		texts := rec.CTCDecode(outputTensor.GetData(), resLen, seqLen)
