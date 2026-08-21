@@ -97,7 +97,7 @@ func NewDefaultPaddleOCRConfig(
 		BoxThresh:          0.6,
 		MinSize:            3,
 		RecBatchSize:       6,
-		RecModelNumClasses: 18385,
+		RecModelNumClasses: 18710,
 		Alpha:              alpha,
 		Beta:               beta,
 		RecImageShape:      [4]int{3, 48, 320, 3200},

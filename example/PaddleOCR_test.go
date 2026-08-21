@@ -22,8 +22,8 @@ func TestPaddleOCR(t *testing.T) {
 	start := time.Now()
 	config := ocr.NewDefaultPaddleOCRConfig(
 		"lib/onnxruntime.dll",
-		"model/det.onnx",
-		"model/rec.onnx",
+		"model/PP-OCRv6_medium_det.onnx",
+		"model/PP-OCRv6_medium_rec.onnx",
 		"model/cls.onnx",
 		"model/dict.txt",
 		false,
